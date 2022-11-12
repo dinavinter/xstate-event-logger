@@ -19,12 +19,16 @@ export class MyCounter {
 
   @State() count: number = 0;
 
-  inc() {
+  disable() {
+    this.serviceLogger.send({type:'DISABLE'});
 
-      this.lightService.send("TIMER" )
+  }
+  enable() {
+    this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
+ 
   }
 
-  dec() {
+  send() {
     this.lightService.send("TIMER" )
 
   }
@@ -53,13 +57,13 @@ export class MyCounter {
         <Host>
            
          <div>
-          <button onClick={this.inc.bind(this)}>disable</button>
-          <button onClick={this.inc.bind(this)}>enable</button>
+          <button onClick={this.disable.bind(this)}>disable</button>
+          <button onClick={this.enable.bind(this)}>enable</button>
 
-          <button onClick={this.dec.bind(this)}>send</button>
+          <button onClick={this.send.bind(this)}>send</button>
           </div>
 
-                    <span>{JSON.stringify(this.state.context.notifications)}</span>
+           <span>{JSON.stringify(this.state.context.notifications)}</span>
 
         </Host>
     );

@@ -41,12 +41,12 @@ export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, Serv
         map: DefaultMap
     },
     initial: "enabled",
-    
+
     states: {
         enabled: {
             entry: ['log','init', 'subscribe'],
             on: {
-               'ENABLE': { 
+                'ENABLE': {
                     target: 'enabled'
                 },
                 'SPY': {
@@ -64,8 +64,10 @@ export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, Serv
             }
         },
         disabled: {
+            entry: ['log','disable', 'unsubscribe'],
+
             on: {
-                'ENABLE': { 
+                'ENABLE': {
                     target: 'enabled'
                 }
             }
@@ -77,14 +79,17 @@ const createServiceLoggerMachine =(notificationsService?: NotificationsService) 
         init: assign( {
             logger:(context, event: EnableEvent) => event.logger || notificationsService|| context.logger
         }) ,
-        
+
         add: assign((context, event: SpyEvent) => {
             return {
                 services: [...context.services, ServiceLoggerListener(event.service, event.map || context.map,context) ]
             }
         }),
         unsubscribe: (context, _: DisableEvent) => {
+            console.log('unsubscribing',context.services );
             context.services.forEach(e=> e.unsubscribe());
+                        console.log('unsubscribed');
+
         } ,
         subscribe: (context, _: EnableEvent) => {
             context.services.forEach(e=> e.subscribe(context));
@@ -100,8 +105,8 @@ const createServiceLoggerMachine =(notificationsService?: NotificationsService) 
 export const serviceLoggerMachine = createServiceLoggerMachine();
 
 export const ServiceLogger=(notificationsService?: NotificationsService)=>{
-     const serviceLogger=  interpret(createServiceLoggerMachine(notificationsService)).start();
- 
+    const serviceLogger=  interpret(createServiceLoggerMachine(notificationsService)).start();
+
     return serviceLogger;
 }
 

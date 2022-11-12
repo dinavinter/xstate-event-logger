@@ -1,10 +1,10 @@
 /* @jsx h */
 import { h, Component, State, Host } from "@stencil/core";
 import {interpret} from "@xstate/fsm";
-import {serviceLoggerMachine, withServiceLogger} from "./logger.service.machine";
+import {serviceLoggerMachine} from "./logger.service.machine";
 import {lightMachine} from "./light.machine";
 import {notificationMachine} from "./notifications.machine";
-
+ 
 @Component({
   tag: "my-counter",
   styleUrl: "index.scss",
@@ -35,11 +35,12 @@ export class MyCounter {
     this.notificationService.subscribe(state => {
       this.state = state;
     });
-
+    this.notificationService.start();
     this.lightService.start();
-    this.serviceLogger= withServiceLogger(this.notificationService);
+    // this.serviceLogger= ServiceLogger(this.notificationService);
+    this.serviceLogger.start();
     this.serviceLogger.send({type:'SPY', service: this.lightService});
-
+    this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
   }
 
   disconnectedCallback() {
@@ -50,9 +51,16 @@ export class MyCounter {
   render() {
     return (
         <Host>
-          <button onClick={this.inc.bind(this)}>-</button>
-          <span>{JSON.stringify(this.state.context.notifications)}</span>
-          <button onClick={this.dec.bind(this)}>+</button>
+           
+         <div>
+          <button onClick={this.inc.bind(this)}>disable</button>
+          <button onClick={this.inc.bind(this)}>enable</button>
+
+          <button onClick={this.dec.bind(this)}>send</button>
+          </div>
+
+                    <span>{JSON.stringify(this.state.context.notifications)}</span>
+
         </Host>
     );
   }

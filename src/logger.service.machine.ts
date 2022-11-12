@@ -27,10 +27,11 @@ export interface ServiceLoggerState extends Typestate<ServiceLoggerContext> {
 
 }
 
+type DisableEvent = { type: "DISABLE" }
 type SpyEvent = { type: "SPY", service: StateMachine.AnyService, map?: ServiceMapper<any> }
 type DisconnectEvent = { type: "DISCONNECT", service: StateMachine.AnyService }
 type EnableEvent = { type: "ENABLE", logger: NotificationsService }
-export type ServiceLoggerEvents = SpyEvent | DisconnectEvent | EnableEvent | { type: "DISABLE" };
+export type ServiceLoggerEvents = SpyEvent | DisconnectEvent | EnableEvent | DisableEvent;
 
 
 export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, ServiceLoggerEvents, ServiceLoggerState> = {
@@ -43,8 +44,11 @@ export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, Serv
     
     states: {
         enabled: {
-            entry: 'init',
+            entry: ['log','init', 'subscribe'],
             on: {
+               'ENABLE': { 
+                    target: 'enabled'
+                },
                 'SPY': {
                     actions: "add",
 
@@ -54,54 +58,48 @@ export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, Serv
                 },
 
                 'DISABLE': {
+                    actions: "disable",
                     target: 'disabled'
                 }
             }
         },
         disabled: {
             on: {
-                'ENABLE': {
-                    actions: 'setLogger',
+                'ENABLE': { 
                     target: 'enabled'
                 }
             }
         }
     }
 }
-const createServiceLoggerMachine =(notificationsService: NotificationsService) => createMachine(ServiceLoggerConfig, {
+const createServiceLoggerMachine =(notificationsService?: NotificationsService) => createMachine(ServiceLoggerConfig, {
     actions: {
         init: assign( {
             logger:(context, event: EnableEvent) => event.logger || notificationsService|| context.logger
         }) ,
+        
         add: assign((context, event: SpyEvent) => {
             return {
                 services: [...context.services, ServiceLoggerListener(event.service, event.map || context.map,context) ]
             }
         }),
-        setLogger:assign( {
-            logger:(context, event: EnableEvent) => event.logger || context.logger
-        }) ,
+        unsubscribe: (context, _: DisableEvent) => {
+            context.services.forEach(e=> e.unsubscribe());
+        } ,
+        subscribe: (context, _: EnableEvent) => {
+            context.services.forEach(e=> e.subscribe(context));
+        },
+        log: (context, event) => {
+            console.log(context);
+            console.log(event);
+
+        }
 
     }
 });
-export const serviceLoggerMachine = createMachine(ServiceLoggerConfig, {
-    actions: {
-        init: assign( {
-            logger:(context, event: EnableEvent) => event.logger || context.logger
-        }) ,
-        add: assign((context, event: SpyEvent) => {
-            return {
-                services: [...context.services, ServiceLoggerListener(event.service, event.map || context.map,context) ]
-            }
-        }),
-        setLogger:assign( { 
-                logger:(context, event: EnableEvent) => event.logger || context.logger
-            }) ,
+export const serviceLoggerMachine = createServiceLoggerMachine();
 
-    }
-})
-
-export const withServiceLogger=(notificationsService?: NotificationsService)=>{
+export const ServiceLogger=(notificationsService?: NotificationsService)=>{
      const serviceLogger=  interpret(createServiceLoggerMachine(notificationsService)).start();
  
     return serviceLogger;
@@ -116,18 +114,25 @@ export function ServiceLoggerListener<TService extends StateMachine.AnyService= 
 
     return {
         service: service,
+
         ...service.subscribe(state => {
             return context.logger.send({
                 type: "NOTIFY", notification: map(state)
             })
 
+        }),
+        subscribe: (context: ServiceLoggerContext) => service.subscribe(state => {
+            return context.logger.send({
+                type: "NOTIFY", notification: map(state)
+            })
         })
-    };
+    }
 }
 
 declare type Listener<TService extends StateMachine.AnyService = StateMachine.AnyService> ={
     service: TService,
-    unsubscribe: ()=> void
+    unsubscribe: ()=> void,
+    subscribe: (context: ServiceLoggerContext)=> void
 }
 
 

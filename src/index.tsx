@@ -1,7 +1,7 @@
 /* @jsx h */
 import { h, Component, State, Host } from "@stencil/core";
 import {interpret} from "@xstate/fsm";
-import {serviceLoggerMachine} from "./logger.service.machine";
+import {serviceCollectionLogger} from "./logger.service.collection";
 import {lightMachine} from "./light.machine";
 import {notificationMachine} from "./notifications.machine";
  
@@ -13,7 +13,7 @@ import {notificationMachine} from "./notifications.machine";
 export class MyCounter {
   private lightService = interpret(lightMachine);
   @State() notificationService = interpret(notificationMachine);
-  @State() serviceLogger = interpret(serviceLoggerMachine);
+  @State() serviceLogger = interpret(serviceCollectionLogger);
 
   @State() state = this.notificationService.state;
 
@@ -29,7 +29,12 @@ export class MyCounter {
   }
 
   send() {
-    this.lightService.send("TIMER" )
+    this.lightService.send("TIMER" ) 
+
+  }
+
+    sendConunter() {
+    this.lightService.send("TIMER" ) 
 
   }
   componentWillLoad() {
@@ -43,8 +48,7 @@ export class MyCounter {
     this.lightService.start();
     // this.serviceLogger= ServiceLogger(this.notificationService);
     this.serviceLogger.start();
-        this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
-
+    this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
     this.serviceLogger.send({type:'SPY', service: this.lightService});
   }
 
@@ -61,11 +65,18 @@ export class MyCounter {
           <button onClick={this.disable.bind(this)}>disable</button>
           <button onClick={this.enable.bind(this)}>enable</button>
 
-          <button onClick={this.send.bind(this)}>send</button>
+          <button onClick={this.send.bind(this)}> light</button>
+
           </div>
+
+  
 
            <span>{JSON.stringify(this.state.context.notifications)}</span>
 
+          <div>
+             <button onClick={this.sendConunter.bind(this)}> counter</button>
+
+           </div>
         </Host>
     );
   }

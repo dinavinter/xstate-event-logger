@@ -4,6 +4,7 @@ import {interpret} from "@xstate/fsm";
 import {serviceCollectionLogger} from "./logger.service.collection";
 import {lightMachine} from "./light.machine";
 import {notificationMachine} from "./notifications.machine";
+import { counterService } from "./counter";
  
 @Component({
   tag: "my-counter",
@@ -12,6 +13,8 @@ import {notificationMachine} from "./notifications.machine";
 })
 export class MyCounter {
   private lightService = interpret(lightMachine);
+  private counterService = counterService;
+
   @State() notificationService = interpret(notificationMachine);
   @State() serviceLogger = interpret(serviceCollectionLogger);
 
@@ -33,8 +36,17 @@ export class MyCounter {
 
   }
 
-    sendConunter() {
-    this.lightService.send("TIMER" ) 
+ spyConunter() {
+    this.serviceLogger.send({type:'SPY', service: this.counterService});
+
+  }
+
+ disconnetConunter() {
+    this.serviceLogger.send({type:'DISCONNECT', service: this.counterService});
+
+  }
+  inc() {
+    this.counterService.send("INC" ) 
 
   }
   componentWillLoad() {
@@ -74,7 +86,11 @@ export class MyCounter {
            <span>{JSON.stringify(this.state.context.notifications)}</span>
 
           <div>
-             <button onClick={this.sendConunter.bind(this)}> counter</button>
+             
+             <button onClick={this.inc.bind(this)}> inc</button>
+             <button onClick={this.spyConunter.bind(this)}> spy</button>
+             <button onClick={this.disconnetConunter.bind(this)}> disconnect</button>
+
 
            </div>
         </Host>

@@ -7,14 +7,13 @@ import {
     Typestate
 } from "@xstate/fsm";
 
-import { notificationMachine, NotificationsService} from "./notifications.machine";
+import {notificationMachine, NotificationsService} from "./notifications.machine";
 import {CreateServiceListenerMachine, ServiceListenerMachine, ServiceMapper} from "./logger.service";
 
 
 export interface ServiceCollectionLoggerContext {
-    services: Array<ServiceFrom<ServiceListenerMachine>>
+    services: Map<StateMachine.AnyService, ServiceFrom<ServiceListenerMachine>>
     logger: NotificationsService
-    map?: ServiceMapper<any>
 }
 
 export interface ServiceCollectionLoggerState extends Typestate<ServiceCollectionLoggerContext> {
@@ -24,31 +23,39 @@ export interface ServiceCollectionLoggerState extends Typestate<ServiceCollectio
 type DisableEvent = { type: "DISABLE" }
 type SpyEvent = { type: "SPY", service: StateMachine.AnyService, map?: ServiceMapper<any> }
 type DisconnectEvent = { type: "DISCONNECT", service: StateMachine.AnyService }
+type ConnectEvent = { type: "CONNECT", service: StateMachine.AnyService }
+
 type EnableEvent = { type: "ENABLE", logger: NotificationsService }
-export type erviceCollectionLoggerEvents = SpyEvent | DisconnectEvent | EnableEvent | DisableEvent;
+export type ServiceCollectionLoggerEvents = SpyEvent | DisconnectEvent | ConnectEvent | EnableEvent | DisableEvent;
 
 
-export const ServiceCollectionLoggerConfig: StateMachine.Config<ServiceCollectionLoggerContext, erviceCollectionLoggerEvents, ServiceCollectionLoggerState> = {
+export const ServiceCollectionLoggerConfig: StateMachine.Config<ServiceCollectionLoggerContext, ServiceCollectionLoggerEvents, ServiceCollectionLoggerState> = {
     context: {
-        services: Array.of<ServiceFrom<ServiceListenerMachine>>(),
+        services: new Map<StateMachine.AnyService, ServiceFrom<ServiceListenerMachine>>(),
         logger: interpret(notificationMachine).start(),
-        map: undefined
     },
     initial: "enabled",
 
     states: {
         enabled: {
-            entry: ['log','init', 'subscribe'],
+            entry: ['log', 'init', 'subscribe'],
             on: {
                 'ENABLE': {
                     target: 'enabled'
                 },
-                'SPY': {
+                'SPY': [{
                     actions: "add",
-
-                },
+                    cond: (context, event) => !context.services.has(event.service),
+                }, {
+                    actions: "connect",
+                    cond: (context, event) => context.services.has(event.service)
+                }],
                 'DISCONNECT': {
-                    actions: ['unsubscribeService', "remove"]
+                    actions: ['log', 'disconnect']
+                },
+
+                'CONNECT': {
+                    actions: ['log', 'connect']
                 },
 
                 'DISABLE': {
@@ -57,8 +64,9 @@ export const ServiceCollectionLoggerConfig: StateMachine.Config<ServiceCollectio
                 }
             }
         },
+
         disabled: {
-            entry: ['log','disable', 'unsubscribe'],
+            entry: ['log', 'disable', 'unsubscribe'],
 
             on: {
                 'ENABLE': {
@@ -68,37 +76,32 @@ export const ServiceCollectionLoggerConfig: StateMachine.Config<ServiceCollectio
         }
     }
 }
-const createServiceCollectionLogger =(notificationsService?: NotificationsService) => createMachine(ServiceCollectionLoggerConfig, {
+const createServiceCollectionLogger = (notificationsService?: NotificationsService) => createMachine(ServiceCollectionLoggerConfig, {
     actions: {
-        init: assign( {
-            logger:(context, event: EnableEvent) => event.logger || notificationsService|| context.logger
-        }) ,
+        init: assign({
+            logger: (context, event: EnableEvent) => event.logger || notificationsService || context.logger
+        }),
 
         add: assign({
-                 services: (context, event: SpyEvent) => [...context.services, interpret(CreateServiceListenerMachine(event.service,context.logger,event.map || context.map)).start() ]
-            })
-      ,
-        unsubscribeService: (context, event: DisconnectEvent) => {
-           context.services.filter(e=>e.state.context.service === event.service).forEach(e=>e.send('UNSUBSCRIBE'))
-         }  ,
-     
-        remove: assign((context, event: DisconnectEvent) => {
-            return {
-                services: context.services.filter(e=>e.state.context.service != event.service)
-            }
+            services: (context, event: SpyEvent) => context.services.set(event.service, interpret(CreateServiceListenerMachine(event.service, context.logger, event.map )).start())
         }),
-        // subscribe:assign((context, _: EnableEvent) => {
-        //     return {
-        //         services: context.services.map(e=> ServiceLoggerListener(e.service, e.map , context))
-        //     }
-        // }),
+
+        connect: (context, event: SpyEvent) => {
+            context.services.get(event.service)?.send('SUBSCRIBE');
+        },
+        disconnect: (context, event: DisconnectEvent) => {
+            context.services.get(event.service)?.send('UNSUBSCRIBE');
+            context.services.delete(event.service);
+        },
         unsubscribe: (context, _: DisableEvent) => {
-            context.services.forEach(e=> e.send('UNSUBSCRIBE'));
-        } ,
+            context.services.forEach(e => e.send('UNSUBSCRIBE'));
+        },
         subscribe: (context, _: EnableEvent) => {
-            context.services.forEach(e=> e.send('SUBSCRIBE'));
+            context.services.forEach(e => e.send('SUBSCRIBE'));
         },
         log: (context, event) => {
+            console.log(event.type); 
+            
             console.log(context);
             console.log(event);
 

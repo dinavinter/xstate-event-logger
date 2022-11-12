@@ -86,6 +86,9 @@ const createServiceLoggerMachine =(notificationsService: NotificationsService) =
 });
 export const serviceLoggerMachine = createMachine(ServiceLoggerConfig, {
     actions: {
+        init: assign( {
+            logger:(context, event: EnableEvent) => event.logger || context.logger
+        }) ,
         add: assign((context, event: SpyEvent) => {
             return {
                 services: [...context.services, ServiceLoggerListener(event.service, event.map || context.map,context) ]

@@ -43,8 +43,9 @@ export class MyCounter {
     this.lightService.start();
     // this.serviceLogger= ServiceLogger(this.notificationService);
     this.serviceLogger.start();
+        this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
+
     this.serviceLogger.send({type:'SPY', service: this.lightService});
-    this.serviceLogger.send({type:'ENABLE', logger: this.notificationService});
   }
 
   disconnectedCallback() {

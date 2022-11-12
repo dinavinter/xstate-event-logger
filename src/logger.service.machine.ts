@@ -6,6 +6,7 @@ import {
     EventFrom,
     createMachine,
     Typestate,
+    ServiceFrom,
     assign
 } from "@xstate/fsm";
 import {omit} from "lodash/fp";
@@ -18,7 +19,7 @@ import {
 
 
 export interface ServiceLoggerContext {
-    services: Array<Listener>
+    services: Array<ServiceFrom<ServiceListenerMachine>>
     logger: NotificationsService
     map: ServiceMapper<any>
 }
@@ -36,7 +37,7 @@ export type ServiceLoggerEvents = SpyEvent | DisconnectEvent | EnableEvent | Dis
 
 export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, ServiceLoggerEvents, ServiceLoggerState> = {
     context: {
-        services: Array.of<Listener>(),
+        services: Array.of<ServiceFrom<ServiceListenerMachine>>(),
         logger: interpret(notificationMachine).start(),
         map: DefaultMap
     },
@@ -54,7 +55,7 @@ export const ServiceLoggerConfig: StateMachine.Config<ServiceLoggerContext, Serv
 
                 },
                 'DISCONNECT': {
-                    actions: "remove"
+                    actions: ['unsubscribeService', "remove"]
                 },
 
                 'DISABLE': {
@@ -80,19 +81,29 @@ const createServiceLoggerMachine =(notificationsService?: NotificationsService) 
             logger:(context, event: EnableEvent) => event.logger || notificationsService|| context.logger
         }) ,
 
-        add: assign((context, event: SpyEvent) => {
+        add: assign({
+                 services: (context, event: SpyEvent) => [...context.services, interpret(ListenerMachine(event.service, event.map || context.map,context.logger)).start() ]
+            })
+      ,
+        unsubscribeService: (context, event: DisconnectEvent) => {
+           context.services.filter(e=>e.state.context.service === event.service).forEach(e=>e.send('UNSUBSCRIBE'))
+         }  ,
+     
+        remove: assign((context, event: DisconnectEvent) => {
             return {
-                services: [...context.services, ServiceLoggerListener(event.service, event.map || context.map,context) ]
+                services: context.services.filter(e=>e.state.context.service != event.service)
             }
         }),
+        // subscribe:assign((context, _: EnableEvent) => {
+        //     return {
+        //         services: context.services.map(e=> ServiceLoggerListener(e.service, e.map , context))
+        //     }
+        // }),
         unsubscribe: (context, _: DisableEvent) => {
-            console.log('unsubscribing',context.services );
-            context.services.forEach(e=> e.unsubscribe());
-                        console.log('unsubscribed');
-
+            context.services.forEach(e=> e.send('UNSUBSCRIBE'));
         } ,
         subscribe: (context, _: EnableEvent) => {
-            context.services.forEach(e=> e.subscribe(context));
+            context.services.forEach(e=> e.send('SUBSCRIBE'));
         },
         log: (context, event) => {
             console.log(context);
@@ -109,6 +120,94 @@ export const ServiceLogger=(notificationsService?: NotificationsService)=>{
 
     return serviceLogger;
 }
+
+
+
+
+function ListenerMachine<TService extends StateMachine.AnyService= StateMachine.AnyService>(
+    service: TService,
+    map: ServiceMapper<TService>  ,
+    logger: NotificationsService): ServiceListenerMachine<TService>{
+
+ 
+     const listenerConfig: ServiceListenerConfig<TService> ={
+         initial: "subscribe",
+         states: {
+             subscribe: {entry: ["log", "subscribe"], on: {UNSUBSCRIBE: {target: "unsubscribe"}}},
+             unsubscribe: {entry: ["log", "unsubscribe"], on: {SUBSCRIBE: {target: "subscribe"}}}
+         },
+
+         context: {
+             service:service,
+             logger: logger,
+             map: map,
+             unsubscribe: () => {}
+             
+         }
+     }
+     
+     return createMachine(listenerConfig, {
+         actions:{
+             unsubscribe: (context, _) => {
+                 context.unsubscribe();
+             } ,
+             subscribe: assign( {
+                unsubscribe:(context, _) => context.service.subscribe(state => {
+                     return context.logger.send({
+                         type: "NOTIFY", notification: context.map(state)
+                     })}).unsubscribe
+             }) ,
+             log: (context, event) => {
+                 console.log(context);
+                 console.log(event);
+
+             }
+
+         }})
+  
+ }
+
+export type ServiceListenerContext <TService extends StateMachine.AnyService= StateMachine.AnyService>={
+    service: TService,
+    map: ServiceMapper<TService>  ,
+    logger: NotificationsService,
+    unsubscribe: ()=>void
+}
+export type ServiceListenerState <TService extends StateMachine.AnyService= StateMachine.AnyService>= Typestate<ServiceListenerContext<TService>>;
+
+export type  ServiceListenerEvents =  { type: "SUBSCRIBE" } |  { type: "UNSUBSCRIBE" }
+export type ServiceListenerMachine<TService extends StateMachine.AnyService= StateMachine.AnyService>=StateMachine.Machine<ServiceListenerContext<TService>, ServiceListenerEvents,ServiceListenerState<TService>>;
+
+export interface ServiceListenerConfig <TService extends StateMachine.AnyService= StateMachine.AnyService
+ > extends StateMachine.Config<ServiceListenerContext<TService>, ServiceListenerEvents,ServiceListenerState<TService>>
+ {
+     
+         context: ServiceListenerContext<TService>,
+         initial: "subscribe",
+
+         states: {
+             subscribe: {
+                 entry: ['log', 'subscribe'],
+                 on: {
+                     'UNSUBSCRIBE': {
+                         target: "unsubscribe",
+
+                     },
+                 }
+             },
+             unsubscribe: {
+                 entry: ['log', 'unsubscribe'],
+
+                 on: {
+                     'SUBSCRIBE': {
+                         target: 'subscribe'
+                     }
+                 }
+             }
+         }
+     };
+
+
 
 
 export function ServiceLoggerListener<TService extends StateMachine.AnyService= StateMachine.AnyService>(
@@ -139,6 +238,8 @@ declare type Listener<TService extends StateMachine.AnyService = StateMachine.An
     unsubscribe: ()=> void,
     subscribe: (context: ServiceLoggerContext)=> void
 }
+
+
 
 
 

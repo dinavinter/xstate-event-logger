@@ -8,4 +8,4 @@ export default {
   },
 };
 
-export const story1 = () => <my-counter></my-counter>;
+export const story1 = () => <event-logger></event-logger>;

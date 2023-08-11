@@ -1,52 +1,62 @@
- import {actions, createMachine, InterpreterFrom, MachineConfig} from "xstate";
-const {assign} = actions;
+import {
+    createMachine,
+    StateMachine,
+    assign,
+    ServiceFrom
+} from "@xstate/fsm";
 
-export type NotificationResponseItem = {
-  severity?: "success" | "info" | "warning" | "error";
-  title: string,
-  id: string,
-  payload: any 
-}
-export interface NotificationsSchema {
 
-    states: {
-        visible: {};
-    };
-}
-
-export type NotificationsEvents = NotificationsAddEvent | { type: "HIDE" };
-export type NotificationsAddEvent = { type: "ADD", notification: NotificationResponseItem } 
+export type NotificationItem = any;
+export type NotificationsEvents = NotificationsAddEvent | { type: "HIDE" } | { type: "ENABLE" } | { type: "DISABLE" };
+export type NotificationsAddEvent = { type: "NOTIFY", notification: NotificationItem }
 
 
 export interface NotificationsContext {
-    notifications: Array<NotificationResponseItem>
+    notifications: Array<NotificationItem>
 
 }
 
-export const notificationsMachineConfig: MachineConfig<NotificationsContext, NotificationsSchema, NotificationsEvents> = {
+
+export const notificationsMachineConfig: StateMachine.Config<NotificationsContext, NotificationsEvents> = {
     context: {
-        notifications: Array.of<NotificationResponseItem>()
+        notifications: Array.of<NotificationItem>()
     },
-    initial: "visible",
+    initial: "enabled",
     states: {
-        visible: {
+        enabled: {
             on: {
-                'ADD': {
+                'NOTIFY': {
                     actions: "addNotification"
+                },
+                'DISABLE': {
+                    target: 'disabled'
+                }
+            }
+        },
+        disabled: {
+            on: {
+                'ENABLE': {
+                    target: 'enabled'
                 }
             }
         }
     }
-};
+}
 
 
-export const notificationMachine= createMachine(notificationsMachineConfig, {
+export declare type NotificationMachine = StateMachine.Machine<NotificationsContext, NotificationsEvents, { value: any, context: NotificationsContext }>;
+export declare type NotificationsState = StateMachine.State<NotificationsContext, NotificationsEvents, { value: any, context: NotificationsContext }>;
+
+
+export const notificationMachine = createMachine(notificationsMachineConfig, {
     actions: {
-        addNotification:  assign({
-            notifications: (context, event:NotificationsAddEvent, meta)=> [...context.notifications , event.notification]
+        addNotification: assign((context, event: NotificationsAddEvent) => {
+            return {
+                notifications: [...context.notifications, event.notification]
+            }
         })
     }
-})
+});
 
+export type NotificationsService = ServiceFrom<NotificationMachine>
 
-export type NotificationsService = InterpreterFrom<typeof notificationMachine>

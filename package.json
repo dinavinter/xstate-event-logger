@@ -2,6 +2,20 @@
   "name": "@wcd/dinavinter.xstate-event-logger",
   "version": "0.0.0",
   "scripts": {
-    "serve": "npx wcd-cli@latest serve 7rA37t2gDlyNiPo87CH3 --open"
+    "serve": "npx wcd-cli@latest serve 7rA37t2gDlyNiPo87CH3 --open",
+    "build": "stencil build --docs",
+    "start": "stencil build --dev --watch --serve",
+    "test": "stencil test --spec --e2e",
+    "test.watch": "stencil test --spec --e2e --watchAll",
+    "generate": "stencil generate"
+
+  },
+  "devDependencies": {
+    "@stencil/core": "^2.19.2",
+    "@xstate/fsm": "latest"
+  },
+  "dependencies": {
+    "@ionic/core": "^6.3.6",
+    "lodash/fp" :"latest"
   }
 }
